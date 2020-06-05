@@ -217,11 +217,48 @@ func (c *helperClient) WritePoint(data interface{}) error {
 		return err
 	}
 
-	return c.WritePointTagsFields(tags, fields, t)
+	return c.WritePointsTagsFields([]tagsFields{tagsFields{tags, fields, t}})
+
+}
+
+func (c *helperClient) WritePoints(data []interface{}) error {
+	if c.using == nil || c.using.db == nil {
+		return fmt.Errorf("no db set for query")
+	}
+
+	if len(data) < 1 {
+		return fmt.Errorf("No points given")
+	}
+
+	points := make([]tagsFields, len(data))
+	for i, d := range data {
+		t, tags, fields, measurement, err := encode(d, c.using.timeField)
+		if err != nil {
+			return err
+		}
+
+		if c.using.measurement == nil {
+			c.using.measurement = &usingValue{measurement, false}
+		}
+
+		points[i] = tagsFields{
+			tags:   tags,
+			fields: fields,
+			t:      t,
+		}
+	}
+
+	return c.WritePointsTagsFields(points)
+}
+
+type tagsFields struct {
+	tags   map[string]string      //Tags of this point
+	fields map[string]interface{} //Fields of this point
+	t      time.Time
 }
 
 // WritePointTagsFields is used to write a point specifying tags and fields.
-func (c *helperClient) WritePointTagsFields(tags map[string]string, fields map[string]interface{}, t time.Time) (err error) {
+func (c *helperClient) WritePointsTagsFields(points []tagsFields) (err error) {
 	if c.using == nil || c.using.db == nil {
 		return fmt.Errorf("no db set for query")
 	}
@@ -239,22 +276,23 @@ func (c *helperClient) WritePointTagsFields(tags map[string]string, fields map[s
 		return err
 	}
 
-	pt, err := influxClient.NewPoint(c.using.measurement.value, tags, fields, t)
-	if !c.using.db.retain {
-		c.using.db = nil
-	}
-	if !c.using.measurement.retain {
-		c.using.measurement = nil
-	}
-	if c.using.timeField != nil && !c.using.timeField.retain {
-		c.using.timeField = nil
-	}
+	for _, point := range points {
+		pt, err := influxClient.NewPoint(c.using.measurement.value, point.tags, point.fields, point.t)
+		if !c.using.db.retain {
+			c.using.db = nil
+		}
+		if !c.using.measurement.retain {
+			c.using.measurement = nil
+		}
+		if c.using.timeField != nil && !c.using.timeField.retain {
+			c.using.timeField = nil
+		}
 
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+		bp.AddPoint(pt)
 	}
-
-	bp.AddPoint(pt)
 
 	return c.client.Write(bp)
 }
