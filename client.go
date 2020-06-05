@@ -45,8 +45,11 @@ type Client interface {
 	// WritePoint is used to write arbitrary data into InfluxDb.
 	WritePoint(data interface{}) error
 
+	// WritePoint is used to write multiple arbitrary data into InfluxDB
+	WritePoints(data []interface{}) error
+
 	// WritePointTagsFields is used to write a point specifying tags and fields.
-	WritePointTagsFields(tags map[string]string, fields map[string]interface{}, t time.Time) error
+	//WritePointsTagsFields(tags map[string]string, fields map[string]interface{}, t time.Time) error
 }
 
 type helperClient struct {
@@ -217,7 +220,7 @@ func (c *helperClient) WritePoint(data interface{}) error {
 		return err
 	}
 
-	return c.WritePointsTagsFields([]tagsFields{tagsFields{tags, fields, t}})
+	return c.writePointsTagsFields([]tagsFields{{tags, fields, t}})
 
 }
 
@@ -248,7 +251,7 @@ func (c *helperClient) WritePoints(data []interface{}) error {
 		}
 	}
 
-	return c.WritePointsTagsFields(points)
+	return c.writePointsTagsFields(points)
 }
 
 type tagsFields struct {
@@ -258,7 +261,7 @@ type tagsFields struct {
 }
 
 // WritePointTagsFields is used to write a point specifying tags and fields.
-func (c *helperClient) WritePointsTagsFields(points []tagsFields) (err error) {
+func (c *helperClient) writePointsTagsFields(points []tagsFields) (err error) {
 	if c.using == nil || c.using.db == nil {
 		return fmt.Errorf("no db set for query")
 	}
